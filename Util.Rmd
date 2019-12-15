@@ -1,0 +1,137 @@
+#' ---
+#' title: "Community Assembly Simulations"
+#' author: "Sara Si-Moussi"
+#' date: "`r Sys.Date()`"
+#' output: pdf_document
+#'  
+#' ---
+
+#+ setup, message=FALSE
+
+
+Input parameters and run functions from 'RunSimModels.Rmd'
+
+
+```{r, eval=FALSE}
+### Load environment ###
+library(parallel)
+library(purrr)
+library(vegan)
+library(randomcoloR)
+library(corrplot)
+library(plotly)
+
+sample_int<-function(n_it,N,ntypes,xvals,yvals,full_overlap=T,seq=F){
+  if(seq){  ##Sample from sequential pairs
+    x=sample(1:(N-1),n_it,F)
+    y=x+1 
+  }else{ ##Sample from all pairs (N(N-1)/2) n_it pairs
+    idx=matrix(1,N,N)
+    diag(idx)=0
+    idx_allowed=which(idx>0)
+    sel=sample(idx_allowed,n_it)
+    x=as.integer((sel-1)/N) + 1
+    y=(sel-1)%%N +1
+  }
+  
+  mat=matrix(0,N,N)
+  start=1
+  end=1
+  step=n_it/ntypes
+  for (i in 1:ntypes){
+    end=start+step-1
+    for (k in start:end) {
+      mat[x[k],y[k]]<-xvals[i]
+      mat[y[k],x[k]]<-yvals[i]
+    }
+    start=end+1
+    #print(diag(mat))
+  }
+  niche_opt=seq(2, 98, length.out = N)
+  if(full_overlap==T)
+    for (j in 1:n_it){
+      niche_opt[y[j]]=niche_opt[x[j]]
+    }
+  return(list(int=mat,niche=niche_opt))
+}
+
+alpha_div=function(tab){ ##tab with rows=epochs and columns=species
+  a=diversity(tab,"shannon")
+}
+
+
+Sys.setenv("plotly_username" = "socco")
+Sys.setenv("plotly_api_key" = "lGpibVQUSZYwoEzVwnQ3")
+ 
+
+plot_dist<-function(nopt,occur,env,nbreadth=20){
+  y=matrix(0,nrow=length(occur),ncol=2)
+  y[,1] <- dnorm(env, mean = nopt, sd = nbreadth)
+  y[,2] <- occur
+  data=data.frame(y)
+  colnames(data)=c("Expected","Predicted")
+  data$env=env
+  
+  #write.csv2(data,"true_simulated.csv")
+
+  p1<-plot_ly(data) %>%
+    add_trace(x=~env,y=~Expected,name = 'Expected',type = 'scatter',mode = 'markers',connectgaps = TRUE, yaxis = "y") %>%
+    add_trace(x=~env,y=~Predicted,name = 'Predicted',type = 'scatter',mode = 'markers',connectgaps = TRUE, yaxis = "y2") %>%
+    layout(title = 'Expected vs predicted distribution',
+       xaxis = list(title = "Environment"),
+       yaxis2 = list(side = 'right', overlaying = "y", title = 'Predicted', showgrid = FALSE, zeroline = FALSE))
+  
+  return(p1)
+}
+
+plot_codist<-function(nopt,occur,env,nbreadth,xn,yn,titre="Fundamental niche vs realized counts"){
+y=matrix(0,nrow=length(env),ncol=4)
+
+y[,1] <- exp(dnorm(env, mean = nopt[1], sd = nbreadth, log=T) - log(dnorm(0) / 20))
+y[,2] <- occur[,1]
+y[,3] <- exp(dnorm(env, mean = nopt[2], sd = nbreadth, log=T) - log(dnorm(0) / 20))
+y[,4] <- occur[,2]
+
+data=data.frame(y)
+colnames(data)=c(paste("Expected_",xn,sep=""),paste("Predicted_",xn,sep=""),
+  paste("Expected_",yn,sep=""),paste("Predicted_",yn,sep=""))
+data$env=env
+
+p1 <- plot_ly() %>% 
+  add_trace(x=data[,"env"],y=data[,paste("Expected_",xn,sep="")],type="scatter",mode="markers",yaxis="y",name=paste("Expected_",xn,sep="")) %>%
+  add_trace(x=data[,"env"],y=data[,paste("Predicted_",xn,sep="")],type="scatter",mode="markers",yaxis="y2",name=paste("Predicted_",xn,sep="")) %>%
+  layout(yaxis=list(side="left",title="Fundamental niche"),
+  yaxis2=list(side="right",overlaying="y",title="Realized counts"),
+  title=titre,
+  showlegend=T)
+
+p2 <-plot_ly() %>%
+  add_trace(x=data[,"env"],y=data[,paste("Expected_",yn,sep="")],type="scatter",mode="markers",yaxis="y",name=paste("Expected_",yn,sep="")) %>%
+  add_trace(x=data[,"env"],y=data[,paste("Predicted_",yn,sep="")],type="scatter",mode="markers",yaxis="y2",name=paste("Predicted_",yn,sep="")) %>%
+  layout(yaxis=list(side="left",title="Fundamental niche"),
+  yaxis2=list(side="right",overlaying="y3",title="Realized counts"),
+  showlegend=T)
+
+p <- subplot(p1,p2,nrows = 2)
+}
+
+jaccard_idx<-function(df,avg=F){
+  if (avg){
+    a=as.integer(df[,1]>median(df[,1]))
+    b=as.integer(df[,2]>median(df[,2]))
+  }
+  else{
+    a=as.integer(df[,1]>0)
+    b=as.integer(df[,2]>0)
+  }
+  
+  tb=table(a,b)
+  jacc=tb[2,2]/(tb[1,2]+tb[2,1]+tb[2,2])
+}
+
+```
+
+
+
+
+

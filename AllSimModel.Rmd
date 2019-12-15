@@ -1,0 +1,80 @@
+#' ---
+#' title: "Community Assembly Simulations"
+#' author: "S. Si-moussi"
+#' date: "`r Sys.Date()`"
+#' output: pdf_document
+#'  
+#' ---
+
+#+ setup, message=FALSE
+
+Input parameters and run functions from 'RunSimModels.Rmd'
+
+```{r, eval=FALSE}
+
+#lapply(list.files(path = "."),load,.GlobalEnv)
+setwd(".")
+assocdir="assocs/"
+outputdir="comms/"
+
+### Simulation ###
+sim_names=as.character(seq(1,29))
+
+l_assoc=lapply(sim_names, function(x)
+  as.matrix(read.csv2(paste(assocdir,x,".csv",sep=""),row.names=1))
+)
+
+l_fac=lapply(l_assoc,function(x) as.integer(x>0))
+l_comp=lapply(l_assoc,function(x) as.integer(x<0))
+
+nruns=length(sim_names)
+
+hsm5=seq(2, 98, length.out = 5)
+hsm10=seq(2, 98, length.out = 10)
+hsm20=seq(2, 98, length.out = 20)
+
+sim_params =list(
+    niche_optima = c(
+                    list(hsm5,hsm10,hsm20),   ##Abiotic filter only
+                    rep(list(hsm5,hsm10,hsm20)[c(rep(1,2),rep(2,4),rep(3,4))],2),
+                    rep(list(hsm5,hsm10,hsm20),each=2) ##Mix of positive and negative associations
+                    ),
+    type         = list("PRIOR")[rep(1, nruns)],
+    comp_inter   = l_comp,
+    fac_inter    = l_fac,
+    beta_comp    = rep(list(1),each=nruns),
+    beta_fac     = rep(list(1),each=nruns),
+    beta_env     = rep(list(1), each = nruns),
+    beta_abun    = rep(list(0), each = nruns),
+    K            = c(
+                    list(10,20,40),   ##Abiotic filter only
+                    rep(c(10,10,rep(list(20,40),each=4)),2),
+                    rep(list(10,20,40),each=2) ##Mix of positive and negative associations
+                    ),
+    interaction  = list("none","positive","negative","both")[c(rep(1, 3),rep(2,10),rep(3,10),rep(3,6))],
+    intra_sp_com = rep(list(0), nruns)
+) 
+
+
+############ Begin simulation ################
+set.seed(1023)
+sim_data = sim_params %>% pmap(simulate_community) 
+
+sim_data=sim_data %>% set_names(sim_names) 
+saveRDS(sim_data,file=paste(outputdir,"sim_data.rds",sep="\\"))
+
+lapply(sim_names, function(x){
+  hist=sim_data[[x]]$hist
+  env=data.frame(sim_data[[x]]$data)$env
+  env_poly<-poly(env,2)
+  occur=do.call(rbind,lapply(hist,function(y) y[nrow(y),]))  ###Keeping only the last community composition
+  occur[,c("enviro","enviro_2")]<-env_poly
+  write.csv2(occur,file=paste(outputdir,x,sep=""))
+})
+
+```
+
+
+
+
+
